@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect } from 'react'
-import { jwtDecode } from 'jwt-decode'
+import api from '../api/axios'
 
 const AuthContext = createContext(null)
 
@@ -8,39 +8,27 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const token = localStorage.getItem('accessToken')
-    if (token) {
-      try {
-        const decoded = jwtDecode(token)
-        // Verificar que el token no esté expirado
-        if (decoded.exp * 1000 > Date.now()) {
-          setUser(decoded)
-        } else {
-          localStorage.removeItem('accessToken')
-          localStorage.removeItem('refreshToken')
-        }
-      } catch {
-        localStorage.removeItem('accessToken')
-        localStorage.removeItem('refreshToken')
-      }
-    }
-    setLoading(false)
+    // Verificar sesión activa al cargar la app
+    api.get('/auth/me')
+      .then(({ data }) => setUser(data))
+      .catch(() => {
+        setUser(null)
+      })
+      .finally(() => setLoading(false))
   }, [])
 
-  const login = (accessToken, refreshToken) => {
-    localStorage.setItem('accessToken', accessToken)
-    localStorage.setItem('refreshToken', refreshToken)
-    const decoded = jwtDecode(accessToken)
-    setUser(decoded)
+  const login = (userData) => setUser(userData)
+
+  const logout = async () => {
+    try {
+      await api.post('/auth/logout')
+    } catch {
+      // Ignorar errores al cerrar sesión
+    } finally {
+      setUser(null)
+    }
   }
 
-  const logout = () => {
-    localStorage.removeItem('accessToken')
-    localStorage.removeItem('refreshToken')
-    setUser(null)
-  }
-
-  // rol_id === 1 → Administrador
   const isAdmin = () => user?.rol_id === 1
 
   return (

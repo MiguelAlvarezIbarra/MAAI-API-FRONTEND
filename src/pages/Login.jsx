@@ -1,31 +1,65 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import AuthService from '../services/auth.service'
 import api from '../api/axios'
+import { validateLogin, isValid } from '../utils/validators'
+import { containsScript } from '../utils/sanitize'
 
 export default function Login() {
   const [form, setForm] = useState({ username: '', password: '' })
-  const [error, setError] = useState('')
+  const [errors, setErrors] = useState({})
+  const [apiError, setApiError] = useState('')
   const [loading, setLoading] = useState(false)
-  const { login, isAdmin } = useAuth()
+  const { login } = useAuth()
   const navigate = useNavigate()
 
   const handleChange = (e) => {
-    setForm({ ...form, [e.target.name]: e.target.value })
-    setError('')
+    const { name, value } = e.target
+    if (containsScript(value)) return
+    const updated = { ...form, [name]: value }
+    setForm(updated)
+    setApiError('')
+    if (errors[name]) {
+      const newErrors = { ...errors }
+      delete newErrors[name]
+      setErrors(newErrors)
+    }
+  }
+
+  const handleBlur = (e) => {
+    const { name } = e.target
+    const fieldErrors = validateLogin(form)
+    if (fieldErrors[name]) {
+      setErrors(prev => ({ ...prev, [name]: fieldErrors[name] }))
+    }
   }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+    const formErrors = validateLogin(form)
+    if (!isValid(formErrors)) { setErrors(formErrors); return }
+
     setLoading(true)
-    setError('')
+    setApiError('')
+
     try {
-      const { data } = await api.post('/auth/login', form)
-      login(data.accessToken, data.refreshToken)
-      // Redirigir según rol
-      navigate(data.accessToken ? '/tasks' : '/login')
+      // Paso 1 — Login (guarda cookies en el navegador)
+      await AuthService.login(form.username.trim(), form.password)
     } catch (err) {
-      setError(err.response?.data?.message || 'Credenciales incorrectas')
+      setApiError(err.response?.data?.message || 'Credenciales incorrectas')
+      setLoading(false)
+      return
+    }
+
+    try {
+      // Paso 2 — Obtener datos del usuario con la cookie recién guardada
+      const { data } = await api.get('/auth/me')
+      login(data)
+      navigate(data.rol_id === 1 ? '/users' : '/tasks')
+    } catch (err) {
+      console.error('Error al obtener perfil:', err)
+      setApiError('Error al obtener datos del usuario, intenta de nuevo')
     } finally {
       setLoading(false)
     }
@@ -41,7 +75,6 @@ export default function Login() {
                               radial-gradient(circle at 70% 80%, rgba(22,41,82,0.6) 0%, transparent 40%)`
           }}
         />
-        {/* Decoración geométrica */}
         <div className="absolute top-1/4 left-1/4 w-64 h-64 border border-gold-500/10 rounded-full" />
         <div className="absolute top-1/4 left-1/4 w-48 h-48 border border-gold-500/10 rounded-full translate-x-8 translate-y-8" />
         <div className="relative z-10 text-center px-12">
@@ -52,7 +85,6 @@ export default function Login() {
             <span className="text-slate-500 text-sm">Tareas y Usuarios</span>
           </p>
         </div>
-        {/* Grid decorativo */}
         <div className="absolute bottom-0 left-0 right-0 h-32 opacity-5"
           style={{
             backgroundImage: 'linear-gradient(rgba(212,168,83,0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(212,168,83,0.5) 1px, transparent 1px)',
@@ -69,7 +101,7 @@ export default function Login() {
             <p className="text-slate-500 text-sm">Ingresa tus credenciales para continuar</p>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-5">
+          <form onSubmit={handleSubmit} className="space-y-5" noValidate>
             <div>
               <label className="block text-xs font-medium text-slate-400 mb-1.5 tracking-wider uppercase">
                 Usuario
@@ -79,11 +111,15 @@ export default function Login() {
                 name="username"
                 value={form.username}
                 onChange={handleChange}
-                className="input-field"
+                onBlur={handleBlur}
+                className={`input-field ${errors.username ? 'border-red-500 focus:border-red-500 focus:ring-red-500/30' : ''}`}
                 placeholder="tu_usuario"
                 autoComplete="username"
-                required
+                maxLength={150}
               />
+              {errors.username && (
+                <p className="text-red-400 text-xs mt-1.5">{errors.username}</p>
+              )}
             </div>
 
             <div>
@@ -95,16 +131,20 @@ export default function Login() {
                 name="password"
                 value={form.password}
                 onChange={handleChange}
-                className="input-field"
+                onBlur={handleBlur}
+                className={`input-field ${errors.password ? 'border-red-500 focus:border-red-500 focus:ring-red-500/30' : ''}`}
                 placeholder="••••••••"
                 autoComplete="current-password"
-                required
+                maxLength={100}
               />
+              {errors.password && (
+                <p className="text-red-400 text-xs mt-1.5">{errors.password}</p>
+              )}
             </div>
 
-            {error && (
+            {apiError && (
               <div className="bg-red-900/30 border border-red-800/50 text-red-300 text-sm px-4 py-3 rounded-lg">
-                {error}
+                {apiError}
               </div>
             )}
 
@@ -113,9 +153,10 @@ export default function Login() {
               disabled={loading}
               className="btn-primary w-full flex items-center justify-center gap-2 mt-2"
             >
-              {loading ? (
-                <div className="w-4 h-4 border-2 border-navy-950 border-t-transparent rounded-full animate-spin" />
-              ) : 'Iniciar sesión'}
+              {loading
+                ? <div className="w-4 h-4 border-2 border-navy-950 border-t-transparent rounded-full animate-spin" />
+                : 'Iniciar sesión'
+              }
             </button>
           </form>
         </div>
