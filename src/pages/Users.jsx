@@ -1,8 +1,6 @@
 import { useState, useEffect } from 'react'
 import Layout from '../components/Layout'
 import UserService from '../services/user.service'
-import { validateUser, isValid } from '../utils/validators'
-import { containsScript, sanitizeObject } from '../utils/sanitize'
 
 const emptyForm = { name: '', lastname: '', username: '', password: '', rol_id: null }
 
@@ -54,17 +52,10 @@ export default function Users() {
     setApiError('')
   }
 
-  // Validación en tiempo real
   const handleChange = (e) => {
     const { name, value } = e.target
-
-    // Prevenir scripts maliciosos
-    if (containsScript(value)) return
-
-    const updated = { ...form, [name]: value }
-    setForm(updated)
-
-    // Limpiar error al corregir
+    setForm({ ...form, [name]: value })
+    // Limpiar error del campo al corregir
     if (errors[name]) {
       const newErrors = { ...errors }
       delete newErrors[name]
@@ -72,52 +63,27 @@ export default function Users() {
     }
   }
 
-  // Validar al perder foco
-  const handleBlur = (e) => {
-    const { name } = e.target
-    const fieldErrors = validateUser(form, !!editId)
-    if (fieldErrors[name]) {
-      setErrors(prev => ({ ...prev, [name]: fieldErrors[name] }))
-    }
-  }
-
   const handleSubmit = async (e) => {
     e.preventDefault()
-
-    // Validar formulario completo
-    const formErrors = validateUser(form, !!editId)
-    if (!isValid(formErrors)) {
-      setErrors(formErrors)
-      return
-    }
-
     setSaving(true)
     setApiError('')
 
     try {
-      // Sanitizar datos antes de enviar
-      const sanitized = sanitizeObject(form)
-
+      // ✅ Toda la validación y sanitización ocurre en UserService
       if (editId) {
-        const payload = {
-          name: sanitized.name,
-          lastname: sanitized.lastname,
-          username: sanitized.username,
-          rol_id: form.rol_id ? Number(form.rol_id) : null
-        }
-        if (form.password) payload.password = form.password
-        await UserService.update(editId, payload)
+        await UserService.update(editId, form)
       } else {
-        await UserService.create({
-          ...sanitized,
-          rol_id: form.rol_id ? Number(form.rol_id) : null
-        })
+        await UserService.create(form)
       }
       await fetchUsers()
       closeModal()
     } catch (err) {
-      const msg = err.response?.data?.error || err.response?.data?.message
-      setApiError(Array.isArray(msg) ? msg[0] : msg || 'Error al guardar')
+      if (err.validationErrors) {
+        setErrors(err.validationErrors)
+      } else {
+        const msg = err.response?.data?.error || err.response?.data?.message
+        setApiError(Array.isArray(msg) ? msg[0] : msg || 'Error al guardar')
+      }
     } finally {
       setSaving(false)
     }
@@ -208,12 +174,8 @@ export default function Users() {
                     <td className="px-6 py-4 text-slate-400 text-sm">{formatDate(user.created_dt)}</td>
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-2 justify-end">
-                        <button onClick={() => openEdit(user)} className="btn-secondary px-3 py-1.5 text-xs">
-                          Editar
-                        </button>
-                        <button onClick={() => handleDelete(user.id)} className="btn-danger px-3 py-1.5 text-xs">
-                          Eliminar
-                        </button>
+                        <button onClick={() => openEdit(user)} className="btn-secondary px-3 py-1.5 text-xs">Editar</button>
+                        <button onClick={() => handleDelete(user.id)} className="btn-danger px-3 py-1.5 text-xs">Eliminar</button>
                       </div>
                     </td>
                   </tr>
@@ -245,7 +207,6 @@ export default function Users() {
                     name="name"
                     value={form.name}
                     onChange={handleChange}
-                    onBlur={handleBlur}
                     className={`input-field ${errors.name ? 'border-red-500 focus:border-red-500 focus:ring-red-500/30' : ''}`}
                     placeholder="Nombre"
                     maxLength={150}
@@ -259,7 +220,6 @@ export default function Users() {
                     name="lastname"
                     value={form.lastname}
                     onChange={handleChange}
-                    onBlur={handleBlur}
                     className={`input-field ${errors.lastname ? 'border-red-500 focus:border-red-500 focus:ring-red-500/30' : ''}`}
                     placeholder="Apellido"
                     maxLength={400}
@@ -268,19 +228,26 @@ export default function Users() {
                 </div>
               </div>
 
-              {/* Username */}
+              {/* Username — solo lectura al editar */}
               <div>
-                <label className="block text-xs font-medium text-slate-400 mb-1.5 tracking-wider uppercase">Username</label>
-                <input
-                  type="text"
-                  name="username"
-                  value={form.username}
-                  onChange={handleChange}
-                  onBlur={handleBlur}
-                  className={`input-field ${errors.username ? 'border-red-500 focus:border-red-500 focus:ring-red-500/30' : ''}`}
-                  placeholder="usuario123"
-                  maxLength={100}
-                />
+                <label className="block text-xs font-medium text-slate-400 mb-1.5 tracking-wider uppercase">
+                  Username {editId && <span className="text-slate-500 normal-case font-normal">(no modificable)</span>}
+                </label>
+                {editId ? (
+                  <div className="input-field opacity-50 cursor-not-allowed text-slate-500 select-none">
+                    @{form.username}
+                  </div>
+                ) : (
+                  <input
+                    type="text"
+                    name="username"
+                    value={form.username}
+                    onChange={handleChange}
+                    className={`input-field ${errors.username ? 'border-red-500 focus:border-red-500 focus:ring-red-500/30' : ''}`}
+                    placeholder="usuario123"
+                    maxLength={100}
+                  />
+                )}
                 {errors.username && <p className="text-red-400 text-xs mt-1">{errors.username}</p>}
               </div>
 
@@ -309,7 +276,6 @@ export default function Users() {
                   name="password"
                   value={form.password}
                   onChange={handleChange}
-                  onBlur={handleBlur}
                   className={`input-field ${errors.password ? 'border-red-500 focus:border-red-500 focus:ring-red-500/30' : ''}`}
                   placeholder="••••••••"
                   maxLength={100}

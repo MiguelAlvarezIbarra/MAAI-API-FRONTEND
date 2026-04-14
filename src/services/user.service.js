@@ -1,56 +1,43 @@
-/**
- * Servicio de usuarios
- * Centraliza todas las llamadas a la API relacionadas con usuarios
- */
 import api from '../api/axios'
+import { sanitizeForm } from '../utils/sanitize'
+import { validateUser, isValid } from '../utils/validators'
 
 const UserService = {
-  /**
-   * Obtiene todos los usuarios (solo admin)
-   * @returns {Promise<User[]>}
-   */
   getAll: async () => {
     const { data } = await api.get('/user')
     return data
   },
 
-  /**
-   * Obtiene un usuario por ID
-   * @param {number} id
-   * @returns {Promise<User>}
-   */
   getById: async (id) => {
     const { data } = await api.get(`/user/${id}`)
     return data
   },
 
-  /**
-   * Crea un nuevo usuario
-   * @param {object} user - { name, lastname, username, password, rol_id }
-   * @returns {Promise<User>}
-   */
   create: async (user) => {
-    const { data } = await api.post('/user', user)
+    const errors = validateUser(user, false)
+    if (!isValid(errors)) throw { validationErrors: errors }
+    const sanitized = sanitizeForm(user)
+    const { data } = await api.post('/user', {
+      ...sanitized,
+      rol_id: user.rol_id ? Number(user.rol_id) : null
+    })
     return data
   },
 
-  /**
-   * Actualiza un usuario existente
-   * @param {number} id
-   * @param {object} user - { name, lastname, username, password?, rol_id }
-   * @returns {Promise<User>}
-   */
   update: async (id, user) => {
-    const { data } = await api.put(`/user/${id}`, user)
+    const errors = validateUser(user, true)
+    if (!isValid(errors)) throw { validationErrors: errors }
+    const sanitized = sanitizeForm(user)
+    const payload = {
+      name: sanitized.name,
+      lastname: sanitized.lastname,
+      rol_id: user.rol_id ? Number(user.rol_id) : null
+    }
+    if (user.password) payload.password = user.password
+    const { data } = await api.put(`/user/${id}`, payload)
     return data
   },
 
-  /**
-   * Elimina un usuario por ID
-   * Solo permite eliminar usuarios sin tareas pendientes
-   * @param {number} id
-   * @returns {Promise<boolean>}
-   */
   remove: async (id) => {
     const { data } = await api.delete(`/user/${id}`)
     return data

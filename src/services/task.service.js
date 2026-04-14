@@ -1,55 +1,32 @@
-/**
- * Servicio de tareas
- * Centraliza todas las llamadas a la API relacionadas con tareas
- */
 import api from '../api/axios'
+import { sanitizeForm } from '../utils/sanitize'
+import { validateTask, isValid } from '../utils/validators'
 
 const TaskService = {
-  /**
-   * Obtiene todas las tareas del usuario en sesión
-   * @returns {Promise<Task[]>}
-   */
   getAll: async () => {
     const { data } = await api.get('/task')
     return data
   },
 
-  /**
-   * Obtiene una tarea por ID
-   * @param {number} id
-   * @returns {Promise<Task>}
-   */
   getById: async (id) => {
     const { data } = await api.get(`/task/${id}`)
     return data
   },
 
-  /**
-   * Crea una nueva tarea
-   * @param {object} task - { name, description, priority }
-   * @returns {Promise<Task>}
-   */
   create: async (task) => {
-    const { data } = await api.post('/task', task)
+    const errors = validateTask(task)
+    if (!isValid(errors)) throw { validationErrors: errors }
+    const { data } = await api.post('/task', sanitizeForm(task))
     return data
   },
 
-  /**
-   * Actualiza una tarea existente
-   * @param {number} id
-   * @param {object} task - { name, description, priority }
-   * @returns {Promise<Task>}
-   */
   update: async (id, task) => {
-    const { data } = await api.put(`/task/${id}`, task)
+    const errors = validateTask(task)
+    if (!isValid(errors)) throw { validationErrors: errors }
+    const { data } = await api.put(`/task/${id}`, sanitizeForm(task))
     return data
   },
 
-  /**
-   * Elimina una tarea por ID
-   * @param {number} id
-   * @returns {Promise<boolean>}
-   */
   remove: async (id) => {
     const { data } = await api.delete(`/task/${id}`)
     return data

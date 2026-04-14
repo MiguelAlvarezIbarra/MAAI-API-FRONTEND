@@ -21,7 +21,6 @@ api.interceptors.response.use(
   async (error) => {
     const original = error.config
 
-    // ✅ No intentar refresh si el error viene de /auth/me o /auth/login
     const isAuthEndpoint = original.url?.includes('/auth/me') || 
                            original.url?.includes('/auth/login')
 
