@@ -1,11 +1,9 @@
 /**
- * Utilidades de sanitización para prevenir XSS e inyección de código
+ * Utilidades de sanitización — prevención XSS, SQL Injection y normalización
  */
 
 /**
- * Elimina caracteres peligrosos de un string para prevenir XSS
- * @param {string} value - Valor a sanitizar
- * @returns {string} Valor sanitizado
+ * Elimina caracteres peligrosos para prevenir XSS
  */
 export const sanitizeString = (value) => {
   if (typeof value !== 'string') return ''
@@ -19,9 +17,7 @@ export const sanitizeString = (value) => {
 }
 
 /**
- * Sanitiza un objeto completo recursivamente
- * @param {object} obj - Objeto a sanitizar
- * @returns {object} Objeto sanitizado
+ * Sanitiza un objeto completo
  */
 export const sanitizeObject = (obj) => {
   const sanitized = {}
@@ -36,11 +32,34 @@ export const sanitizeObject = (obj) => {
 }
 
 /**
- * Previene que el usuario pegue scripts en inputs
- * @param {string} value
- * @returns {boolean}
+ * Previene inyección de scripts en inputs
  */
 export const containsScript = (value) => {
   const scriptPattern = /<script|javascript:|on\w+=/i
   return scriptPattern.test(value)
+}
+
+/**
+ * Normaliza espacios múltiples entre palabras
+ * Ej: "Juan   Antonio" → "Juan Antonio"
+ */
+export const normalizeSpaces = (value) => {
+  if (typeof value !== 'string') return ''
+  return value.replace(/\s+/g, ' ').trim()
+}
+
+/**
+ * Sanitiza y normaliza un formulario completo antes de enviarlo a la API
+ * Aplica: trim, normalización de espacios y escape de caracteres peligrosos
+ */
+export const sanitizeForm = (form) => {
+  const result = {}
+  for (const key in form) {
+    if (typeof form[key] === 'string') {
+      result[key] = normalizeSpaces(sanitizeString(form[key]))
+    } else {
+      result[key] = form[key]
+    }
+  }
+  return result
 }
